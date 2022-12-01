@@ -10,16 +10,18 @@
 #define DRIVER_ADDRESS 0b00 // TMC2209 Driver address according to MS1 and MS2
 #define R_SENSE 0.11f       // SilentStepStick series use 0.11 ...and so does my fysetc TMC2209 (?)
 
-const byte MOTOR_PIN_OFFSETS[] = {2, 9}; // each offset is summed with the pin positions above to give the actual position on the arduino
+const byte MOTOR_PIN_OFFSETS[] = {2, 9, 14}; // each offset is summed with the pin positions above to give the actual position on the arduino
 
 SoftwareSerial SoftSerials[] = {
     SoftwareSerial(SW_RX + MOTOR_PIN_OFFSETS[0], SW_TX + MOTOR_PIN_OFFSETS[0]),
     SoftwareSerial(SW_RX + MOTOR_PIN_OFFSETS[1], SW_TX + MOTOR_PIN_OFFSETS[1]),
+    SoftwareSerial(SW_RX + MOTOR_PIN_OFFSETS[2], SW_TX + MOTOR_PIN_OFFSETS[2]),
 };
 
 TMC2209Stepper TMCdrivers[] = {
     TMC2209Stepper((Stream *)&SoftSerials[0], R_SENSE, DRIVER_ADDRESS),
     TMC2209Stepper((Stream *)&SoftSerials[1], R_SENSE, DRIVER_ADDRESS),
+    TMC2209Stepper((Stream *)&SoftSerials[2], R_SENSE, DRIVER_ADDRESS),
 };
 
 int accel;
