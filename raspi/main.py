@@ -35,6 +35,7 @@ async def handler(websocket):
 
             # Compress frame
             ok, compressed = cv2.imencode('.jpg', LAST_SEND_FRAME)
+
             # Save to Byte Stream
             np_bytes = BytesIO()
             np.save(np_bytes, compressed, allow_pickle=True)

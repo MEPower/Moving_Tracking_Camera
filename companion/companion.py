@@ -8,8 +8,9 @@ from io import BytesIO
 
 SERVER = "localhost:8764"
 
+
 async def client():
-    async with websockets.connect("ws://" + SERVER, max_size=None, read_limit=2**20) as websocket:
+    async with websockets.connect("ws://" + SERVER, max_size=None, read_limit=2 ** 20) as websocket:
         print("Raspberry Connected, press f to get frame, press t to select tracking area")
 
         # Handshake
@@ -44,5 +45,6 @@ async def client():
             elif keypress == ord('q'):
                 cv2.destroyAllWindows()
                 break
+
 
 asyncio.run(client())
