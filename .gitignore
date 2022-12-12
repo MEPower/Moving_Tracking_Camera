@@ -2,3 +2,4 @@ venv/
 raspi/.idea/
 .DS_Store
 
+.vscode/
