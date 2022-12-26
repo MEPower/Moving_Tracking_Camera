@@ -3,10 +3,23 @@
 #include <optional>
 
 #include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/tracking.hpp>
 #include <opencv2/videoio.hpp>
 
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/server.hpp>
+
 // Serial: https://github.com/wjwwood/serial
+// Websockets: https://github.com/zaphoyd/websocketpp/ (v0.8.2, also needs boost asio)
+
+typedef websocketpp::server<websocketpp::config::asio> server;
+typedef server::message_ptr message_ptr;
+typedef websocketpp::frame::opcode::value opcode;
+
+using websocketpp::lib::placeholders::_1;
+using websocketpp::lib::placeholders::_2;
+using websocketpp::lib::bind;
 
 enum class ObjectTracker {
     CSRT,
@@ -21,7 +34,7 @@ enum class TrackingState {
 ObjectTracker TRACKER = ObjectTracker::CSRT;
 TrackingState STATE = TrackingState::IDLE;
 
-cv::Mat ACTIVE_FRAME;
+cv::Mat ACTIVE_FRAME, LAST_SEND_FRAME;
 std::optional<std::pair<cv::InputArray, cv::Rect>> TO_TRACK = std::nullopt; // frame and corresponding bounding box
 std::optional<bool> ARDUINO = std::nullopt; // replace by correct type when integrating serial
 
@@ -64,7 +77,49 @@ void sendToArduino(std::pair<int, int> offset_vector){
     // TODO
 }
 
+void websocket_handler(server* s, websocketpp::connection_hdl hdl, message_ptr msg) {
+    std::string message = msg->get_payload();
+    std::cerr << "Received message: " << message << "\n";
+
+    if(message == "c"){
+        std::cerr << "Companion is connected\n";
+        s->send(hdl, "ok", opcode::TEXT);
+    } else if(message == "f") {
+        std::cerr << "Frame requested\n";
+        LAST_SEND_FRAME = ACTIVE_FRAME;
+        std::vector<uchar> buf;
+        cv::imencode(".jpg", LAST_SEND_FRAME, buf);
+        s->send(hdl, buf, opcode::BINARY); // TODO find out how to send buf correctly
+    } else if(message == "t"){
+        std::cerr << "Track region received\n";
+        cv::Rect roi; // TODO find out how to receive the ROI
+        TO_TRACK.emplace(LAST_SEND_FRAME, roi);
+        STATE = TrackingState::TRACK;
+    }
+}
+
+void start_websocket_server(){
+    server ws_server;
+
+    try {
+        // Set logging settings
+        ws_server.set_access_channels(websocketpp::log::alevel::all);
+        ws_server.clear_access_channels(websocketpp::log::alevel::frame_payload);
+
+        ws_server.init_asio();
+        ws_server.set_message_handler(bind(&websocket_handler, &ws_server,::_1,::_2));
+        ws_server.listen(8764);
+        ws_server.start_accept();
+        ws_server.run();
+        std::cerr << "Server started successfully!\n";
+    } catch (websocketpp::exception const & e) {
+        std::cerr << "[ERROR] " << e.what() << std::endl;
+    }
+}
+
 int main() {
+    start_websocket_server();
+
     cv::Mat frame;
     cv::VideoCapture capture;
     bool opened = capture.open(0, cv::CAP_ANY, {
