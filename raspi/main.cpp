@@ -28,6 +28,7 @@ enum class ObjectTracker {
 
 enum class TrackingState {
     IDLE,
+    RECEIVE_BBOX,
     TRACK
 };
 
@@ -65,23 +66,42 @@ void displayTrackingFailure(cv::Mat &frame) {
     cv::putText(frame, "Tracking failure detected", {100, 80}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {0, 0, 255}, 2);
 }
 
-void displayTrackingSuccess(cv::Mat &frame, cv::Rect bbox, std::pair<int, int> f_center, std::pair<int, int> offset_vector){
+void displayTrackingSuccess(cv::Mat &frame, cv::Rect bbox, cv::Point f_center, cv::Point offset_vector){
+    cv::Point p_center = (bbox.tl() + bbox.br()) / 2;
+    cv::rectangle(frame, bbox, {255, 0, 0}, 2, 1);
+    cv::line(frame, f_center, p_center, {255, 0, 0}, 2, 1);
+    cv::putText(frame, "Center offset (scaled): (" + std::to_string(offset_vector.x) + ", " + std::to_string(offset_vector.y) + ")", {100, 110}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {255, 255, 0}, 2);
+}
+
+cv::Point calculateOffsetVector(cv::Rect bbox, cv::Point f_center){
+    cv::Point p_center = (bbox.tl() + bbox.br()) / 2;
+    cv::Point vector = p_center - f_center;
+    // TODO
+    return vector;
+}
+
+void sendToArduino(cv::Point offset_vector){
     // TODO
 }
 
-std::pair<int, int> calculateOffsetVector(){
-    // TODO
-}
-
-void sendToArduino(std::pair<int, int> offset_vector){
-    // TODO
-}
-
+// TODO test if all the magic here works
 void websocket_handler(server* s, websocketpp::connection_hdl hdl, message_ptr msg) {
     std::string message = msg->get_payload();
     std::cerr << "Received message: " << message << "\n";
 
-    if(message == "c"){
+    if(STATE == TrackingState::RECEIVE_BBOX){
+        std::cerr << "Track region received\n";
+        std::vector<int> bbox(4);
+        message = message.substr(1, message.length()-2);
+        for(int i = 0; i < 4; i++){
+            size_t pos = message.find(',');
+            bbox[i] = std::stoi(message.substr(0, pos));
+            message.erase(0, pos+1);
+        }
+        cv::Rect roi(bbox[0], bbox[1], bbox[2], bbox[3]);
+        TO_TRACK.emplace(LAST_SEND_FRAME, roi);
+        STATE = TrackingState::TRACK;
+    } else if(message == "c"){
         std::cerr << "Companion is connected\n";
         s->send(hdl, "ok", opcode::TEXT);
     } else if(message == "f") {
@@ -89,16 +109,13 @@ void websocket_handler(server* s, websocketpp::connection_hdl hdl, message_ptr m
         LAST_SEND_FRAME = ACTIVE_FRAME;
         std::vector<uchar> buf;
         cv::imencode(".jpg", LAST_SEND_FRAME, buf);
-        s->send(hdl, buf, opcode::BINARY); // TODO find out how to send buf correctly
+        s->send(hdl, buf.data(), sizeof(buf.data()) * buf.size(), opcode::BINARY);
     } else if(message == "t"){
-        std::cerr << "Track region received\n";
-        cv::Rect roi; // TODO find out how to receive the ROI
-        TO_TRACK.emplace(LAST_SEND_FRAME, roi);
-        STATE = TrackingState::TRACK;
+        STATE = TrackingState::RECEIVE_BBOX;
     }
 }
 
-void start_websocket_server(){
+server start_websocket_server(){
     server ws_server;
 
     try {
@@ -115,10 +132,12 @@ void start_websocket_server(){
     } catch (websocketpp::exception const & e) {
         std::cerr << "[ERROR] " << e.what() << std::endl;
     }
+
+    return ws_server;
 }
 
 int main() {
-    start_websocket_server();
+    server ws_server = start_websocket_server();
 
     cv::Mat frame;
     cv::VideoCapture capture;
@@ -135,7 +154,7 @@ int main() {
     while(true) {
         capture >> frame;
         if(frame.empty()) break;
-        auto f_center = std::make_pair(frame.cols/2, frame.rows/2);
+        cv::Point f_center(frame.cols/2, frame.rows/2);
         auto tracker = getTracker(TRACKER);
         int64 timer = cv::getTickCount();
         
@@ -147,7 +166,7 @@ int main() {
             }
 
             if(tracker->update(frame, bbox)) {
-                std::pair<int, int> offset_vector = calculateOffsetVector();
+                cv::Point offset_vector = calculateOffsetVector(bbox, f_center);
                 displayTrackingSuccess(frame, bbox, f_center, offset_vector);
                 sendToArduino(offset_vector);
             } else {
@@ -161,5 +180,6 @@ int main() {
     }
 
     capture.release();
+    ws_server.stop_listening(); // TODO we should also close connections correctly
     return 0;
 }
