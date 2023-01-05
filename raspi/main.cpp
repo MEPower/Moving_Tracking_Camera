@@ -35,9 +35,10 @@ enum class TrackingState {
 ObjectTracker TRACKER = ObjectTracker::CSRT;
 TrackingState STATE = TrackingState::IDLE;
 
-cv::Mat ACTIVE_FRAME, LAST_SEND_FRAME;
+cv::Mat ACTIVE_FRAME(1280, 720, CV_8UC3, cv::Scalar(255,0,0));
+cv::Mat LAST_SEND_FRAME;
 std::optional<std::pair<cv::InputArray, cv::Rect>> TO_TRACK = std::nullopt; // frame and corresponding bounding box
-std::optional<bool> ARDUINO = std::nullopt; // replace by correct type when integrating serial
+std::optional<std::string> ARDUINO = std::nullopt; // replace by correct type when integrating serial
 
 cv::Ptr<cv::Tracker> getTracker(ObjectTracker trackerChoice) {
     if(trackerChoice == ObjectTracker::CSRT) {
@@ -75,16 +76,19 @@ void displayTrackingSuccess(cv::Mat &frame, cv::Rect bbox, cv::Point f_center, c
 
 cv::Point calculateOffsetVector(cv::Rect bbox, cv::Point f_center){
     cv::Point p_center = (bbox.tl() + bbox.br()) / 2;
-    cv::Point vector = p_center - f_center;
-    // TODO
-    return vector;
+    cv::Point offset = p_center - f_center;
+    cv::Point norm_offset(offset.x / f_center.x, offset.y / f_center.y);
+    cv::Point clamped_offset(
+        std::min(std::max(-1, norm_offset.x), 1),
+        std::min(std::max(-1, norm_offset.y), 1)   
+    );
+    return 255 * clamped_offset;
 }
 
 void sendToArduino(cv::Point offset_vector){
     // TODO
 }
 
-// TODO test if all the magic here works
 void websocket_handler(server* s, websocketpp::connection_hdl hdl, message_ptr msg) {
     std::string message = msg->get_payload();
     std::cerr << "Received message: " << message << "\n";
@@ -151,11 +155,12 @@ int main() {
     }
 
     cv::Rect bbox;
+    auto tracker = getTracker(TRACKER);
+
     while(true) {
         capture >> frame;
         if(frame.empty()) break;
         cv::Point f_center(frame.cols/2, frame.rows/2);
-        auto tracker = getTracker(TRACKER);
         int64 timer = cv::getTickCount();
         
         if(STATE == TrackingState::TRACK) {
