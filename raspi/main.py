@@ -4,12 +4,14 @@ import cv2, serial, numpy as np
 import asyncio
 import websockets
 from io import BytesIO
+from time import sleep
 
-HEADLESS = True
+HEADLESS = False
 
 # Communication with Arduino
-# BAUDRATE = 115200
+BAUDRATE = 9600  # 115200
 arduino = None
+arduino_state = None
 
 # Interface between server and tracker
 ACTIVE_FRAME = None
@@ -18,7 +20,7 @@ TO_TRACK = None
 STATE = "IDLE"
 
 # Tracking Algorithm
-TRACKER = "csrt"
+TRACKER = "kcf"
 
 
 async def handler(websocket):
@@ -96,8 +98,23 @@ while True:
 
         # Press C to connect to Arduino
         if keyPress == ord('c'):
-            # arduino = serial.Serial(port='COM4', baudrate=BAUDRATE, timeout=.1)
-            pass
+            arduino = serial.Serial(port='/dev/cu.usbmodem2101', baudrate=9600)
+            arduino.__enter__()
+
+            while not arduino.isOpen():
+                print('waiting to open')
+                arduino.open()
+                sleep(0.1)
+
+            sleep(0.1)
+
+            ready = arduino.read()
+            if ready != b'r':
+                arduino_state = "failed"
+                arduino.__exit__()
+                arduino = None
+            else:
+                arduino_state = "connected"
 
         # Press T to define Tracking Region
         if keyPress == ord('t'):
@@ -141,12 +158,12 @@ while True:
                 vector[1] / (f_height / 2)
             )
             clamped_vector = (
-                min(max(-1, normalized_vector[0]), 1),
-                min(max(-1, normalized_vector[1]), 1),
+                min(max(-1, normalized_vector[0]), 0.99),
+                min(max(-1, normalized_vector[1]), 0.99),
             )
             scaled_vector = (
-                int(clamped_vector[0] * 255),
-                int(clamped_vector[1] * 255)
+                int(clamped_vector[0] * 5) + 5,
+                int(clamped_vector[1] * 5) + 5
             )
 
             cv2.putText(frame, "Center offset: " + str(clamped_vector), (100, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
@@ -156,9 +173,12 @@ while True:
                         (255, 255, 0), 2)
 
             if arduino is not None:
-                # TO BE DONE
-                arduino.write(str(scaled_vector))
-
+                message = f'{scaled_vector[0]}{scaled_vector[1]}'.encode('UTF-8')
+                arduino.write(message)
+                # arduino.write(scaled_vector[0].to_bytes())
+                # arduino.write(scaled_vector[1].to_bytes())
+                print(arduino.read(), arduino.read_all())
+            # Tracking success
         else:
             # Tracking failure
             cv2.putText(frame, "Tracking failure detected", (100, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
@@ -173,7 +193,7 @@ while True:
     fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
     cv2.putText(frame, "FPS : " + str(int(fps)), (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50, 170, 50), 2)
 
-    cv2.putText(frame, "Arduino " + "not connected" if arduino is None else "connected", (100, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+    cv2.putText(frame, "Arduino " + "not connected" if arduino_state is None else arduino_state, (100, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
                 (255, 255, 0), 2)
 
     # Make frame accessible to server
