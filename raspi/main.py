@@ -109,7 +109,7 @@ while True:
             sleep(0.1)
 
             ready = arduino.read()
-            if ready != b'r':
+            if ready != b'r' or arduino is None:
                 arduino_state = "failed"
                 arduino.__exit__()
                 arduino = None
