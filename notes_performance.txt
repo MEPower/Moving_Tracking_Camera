@@ -1,0 +1,53 @@
+About Arduino perrformance
+
+- because of beginner focus more focus on security than on speed
+ -> other microcontrollers might have better perfomance
+ 
+- arduino uses all of its processor, all the time -> although some of the basuc commands, like DigitalWWrite or AnalogRead could e overwritten with focus
+on better performance
+
+About Raspberry Pi performance
+
+-proposal:
+- focus mostly on raspberry performance, as Arduino improvemenst ca only happen with a better microcontrollller
+ or rewriting importnat functions
+
+Relevnat performance metrics or at least things we should take a look at:
+- time per program = clock period * cycles per instruction * instructions executed per program 
+- Clock rate
+- Cycles per Instruction
+- execution time 
+- turnaround time(amybe after the tarcked object has disappeared)
+-(availability) - not for us, only one is using the system
+- wall clock time(time elapsed as seen on clock or stopeatch from program  start till now)
+- response time(how long it takes until CPU reacts(to an obviious movement))
+- throoughput(MIPS is one way of measuring throughput)
+- scalability(how does teh system handle faster movements)
+
+possibly useful linux commnads commands:
+- nice
+-iostat
+-sar
+-pstree
+-ps
+-xmperf
+- System Monitir in Linux
+- top in 
+- htop 
+
+improvement options:
+- get better raspberry(Model 4+), as they have better CPU and v´can have more RAM
+- overclocking(be aware of negative consequwnces)
+-better SD-card(SSD?)
+- experient with/add a GPU
+- prevent overhaeting with air cooler
+ -always potentially better performance by refactoring current code
+
+Open questions:
+-would using raspberry pi camera lead too better runtimr
+- if we want to test program performance of that one program, do benchmarks like the following ones even make sense
+(
+- these first 2 benchmarks for pi itself:https://u-labs.de/portal/raspberry-pi-geschwindigkeit-messen-mit-diesen-benchmarks-testest-du-wie-schnell-dein-pi-ist/
+- other options: linpack/ ramspeed-smp(folloeing site already has graphs for diff pi models though:
+https://magpi.raspberrypi.com/articles/raspberry-pi-4-specs-benchmarks)
+)
