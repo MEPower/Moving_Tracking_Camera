@@ -1,8 +1,10 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <thread>
 
 #include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/tracking.hpp>
 #include <opencv2/videoio.hpp>
@@ -29,16 +31,18 @@ enum class ObjectTracker {
 enum class TrackingState {
     IDLE,
     RECEIVE_BBOX,
-    TRACK
+    TRACK,
+    TERMINATE
 };
 
 ObjectTracker TRACKER = ObjectTracker::CSRT;
 TrackingState STATE = TrackingState::IDLE;
 
-cv::Mat ACTIVE_FRAME(1280, 720, CV_8UC3, cv::Scalar(255,0,0));
+cv::Mat ACTIVE_FRAME(480, 640, CV_8UC3);
 cv::Mat LAST_SEND_FRAME;
-std::optional<std::pair<cv::InputArray, cv::Rect>> TO_TRACK = std::nullopt; // frame and corresponding bounding box
+std::optional<std::pair<cv::Mat, cv::Rect>> TO_TRACK = std::nullopt; // frame and corresponding bounding box
 std::optional<std::string> ARDUINO = std::nullopt; // replace by correct type when integrating serial
+int WS_CONN_COUNT = 0;
 
 cv::Ptr<cv::Tracker> getTracker(ObjectTracker trackerChoice) {
     if(trackerChoice == ObjectTracker::CSRT) {
@@ -53,18 +57,18 @@ void displayGeneralInfo(cv::Mat &frame, int64 timer) {
     cv::putText(frame, (TRACKER == ObjectTracker::CSRT ? "CSRT Tracker" : "KCF Tracker"), {100, 20}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
 
     // Resolution
-    cv::putText(frame, frame.cols + "x" + frame.rows, {100, 80}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
+    cv::putText(frame, std::to_string(frame.cols) + "x" + std::to_string(frame.rows), {100, 80}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
 
     // Frames per Second
     int fps = cv::getTickFrequency() / (cv::getTickCount() - timer);
-    cv::putText(frame, "FPS: " + fps, {100, 50}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
+    cv::putText(frame, "FPS: " + std::to_string(fps), {100, 50}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
 
     // Connection State
     cv::putText(frame, (ARDUINO ? "Arduino connected" : "Arduino not connected"), {100, 170}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {255, 255, 0}, 2);
 }
 
 void displayTrackingFailure(cv::Mat &frame) {
-    cv::putText(frame, "Tracking failure detected", {100, 80}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {0, 0, 255}, 2);
+    cv::putText(frame, "Tracking failure detected", {100, 110}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {0, 0, 255}, 2);
 }
 
 void displayTrackingSuccess(cv::Mat &frame, cv::Rect bbox, cv::Point f_center, cv::Point offset_vector){
@@ -74,13 +78,13 @@ void displayTrackingSuccess(cv::Mat &frame, cv::Rect bbox, cv::Point f_center, c
     cv::putText(frame, "Center offset (scaled): (" + std::to_string(offset_vector.x) + ", " + std::to_string(offset_vector.y) + ")", {100, 110}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {255, 255, 0}, 2);
 }
 
-cv::Point calculateOffsetVector(cv::Rect bbox, cv::Point f_center){
-    cv::Point p_center = (bbox.tl() + bbox.br()) / 2;
-    cv::Point offset = p_center - f_center;
-    cv::Point norm_offset(offset.x / f_center.x, offset.y / f_center.y);
-    cv::Point clamped_offset(
-        std::min(std::max(-1, norm_offset.x), 1),
-        std::min(std::max(-1, norm_offset.y), 1)   
+cv::Point calculateOffsetVector(cv::Rect bbox, cv::Point2d f_center){
+    cv::Point2d p_center = (bbox.tl() + bbox.br()) / 2.0;
+    cv::Point2d offset = p_center - f_center;
+    cv::Point2d norm_offset(offset.x / f_center.x, offset.y / f_center.y);
+    cv::Point2d clamped_offset(
+        std::min(std::max(-1.0, norm_offset.x), 1.0),
+        std::min(std::max(-1.0, norm_offset.y), 1.0)   
     );
     return 255 * clamped_offset;
 }
@@ -89,7 +93,7 @@ void sendToArduino(cv::Point offset_vector){
     // TODO
 }
 
-void websocket_handler(server* s, websocketpp::connection_hdl hdl, message_ptr msg) {
+void websocket_handler(server* serv, websocketpp::connection_hdl hdl, message_ptr msg) {
     std::string message = msg->get_payload();
     std::cerr << "Received message: " << message << "\n";
 
@@ -103,23 +107,36 @@ void websocket_handler(server* s, websocketpp::connection_hdl hdl, message_ptr m
             message.erase(0, pos+1);
         }
         cv::Rect roi(bbox[0], bbox[1], bbox[2], bbox[3]);
-        TO_TRACK.emplace(LAST_SEND_FRAME, roi);
+        TO_TRACK.emplace(LAST_SEND_FRAME.clone(), roi);
         STATE = TrackingState::TRACK;
     } else if(message == "c"){
         std::cerr << "Companion is connected\n";
-        s->send(hdl, "ok", opcode::TEXT);
+        serv->send(hdl, "ok", opcode::TEXT);
     } else if(message == "f") {
         std::cerr << "Frame requested\n";
-        LAST_SEND_FRAME = ACTIVE_FRAME;
+        LAST_SEND_FRAME = ACTIVE_FRAME.clone();
         std::vector<uchar> buf;
         cv::imencode(".jpg", LAST_SEND_FRAME, buf);
-        s->send(hdl, buf.data(), sizeof(buf.data()) * buf.size(), opcode::BINARY);
+        serv->send(hdl, buf.data(), buf.size(), opcode::BINARY);
     } else if(message == "t"){
         STATE = TrackingState::RECEIVE_BBOX;
     }
 }
 
-server start_websocket_server(){
+// maintain number of open connections and exit the program once all were closed by the client(s)
+void websocket_on_open(websocketpp::connection_hdl hdl){
+    WS_CONN_COUNT += 1;
+}
+
+void websocket_on_close(server* serv, websocketpp::connection_hdl hdl){
+    WS_CONN_COUNT -= 1;
+    if(WS_CONN_COUNT == 0){
+        serv->stop_listening();
+        STATE = TrackingState::TERMINATE;
+    }
+}
+
+void start_websocket_server(){
     server ws_server;
 
     try {
@@ -129,25 +146,24 @@ server start_websocket_server(){
 
         ws_server.init_asio();
         ws_server.set_message_handler(bind(&websocket_handler, &ws_server,::_1,::_2));
+        ws_server.set_open_handler(bind(&websocket_on_open, ::_1));
+        ws_server.set_close_handler(bind(&websocket_on_close, &ws_server, ::_1));
         ws_server.listen(8764);
         ws_server.start_accept();
         ws_server.run();
-        std::cerr << "Server started successfully!\n";
     } catch (websocketpp::exception const & e) {
         std::cerr << "[ERROR] " << e.what() << std::endl;
     }
-
-    return ws_server;
 }
 
 int main() {
-    server ws_server = start_websocket_server();
+    std::thread ws_thread(start_websocket_server);
 
     cv::Mat frame;
     cv::VideoCapture capture;
-    bool opened = capture.open(0, cv::CAP_ANY, {
-        cv::VideoCaptureProperties::CAP_PROP_FRAME_WIDTH, 1280,
-        cv::VideoCaptureProperties::CAP_PROP_FRAME_HEIGHT, 720
+    bool opened = capture.open(2, cv::CAP_ANY, {
+        cv::VideoCaptureProperties::CAP_PROP_FRAME_WIDTH, 640,
+        cv::VideoCaptureProperties::CAP_PROP_FRAME_HEIGHT, 480
     });
 
     if(!opened) {
@@ -157,10 +173,10 @@ int main() {
     cv::Rect bbox;
     auto tracker = getTracker(TRACKER);
 
-    while(true) {
+    while(STATE != TrackingState::TERMINATE) {
         capture >> frame;
         if(frame.empty()) break;
-        cv::Point f_center(frame.cols/2, frame.rows/2);
+        cv::Point2d f_center(frame.cols/2.0, frame.rows/2.0);
         int64 timer = cv::getTickCount();
         
         if(STATE == TrackingState::TRACK) {
@@ -177,14 +193,13 @@ int main() {
             } else {
                 displayTrackingFailure(frame);
             }
-
-            displayGeneralInfo(frame, timer);
-            ACTIVE_FRAME = frame;
-
         }
+
+        displayGeneralInfo(frame, timer);
+        ACTIVE_FRAME = frame.clone();
     }
 
     capture.release();
-    ws_server.stop_listening(); // TODO we should also close connections correctly
+    ws_thread.join();
     return 0;
 }
