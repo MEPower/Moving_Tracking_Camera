@@ -6,12 +6,15 @@ import cv2
 import numpy as np
 from io import BytesIO
 
-SERVER = "localhost"
-# SERVER = "campi.local"
+SERVER = "172.20.10.2:8764"
+SERVER_TYPE = "C++"  # or None
+
+SERVER = "localhost:8764"
+SERVER_TYPE = "Python"
 
 
 async def client():
-    async with websockets.connect("ws://" + SERVER + ":8764", max_size=None, read_limit=2 ** 20) as websocket:
+    async with websockets.connect("ws://" + SERVER, max_size=None, read_limit=2 ** 20) as websocket:
         print("Raspberry Connected, press f to get frame, press t to select tracking area")
 
         # Handshake
@@ -25,8 +28,15 @@ async def client():
             # Request frame
             await websocket.send("f")
             serialized = await websocket.recv()
-            loaded_bytes = BytesIO(serialized)
-            compressed = np.load(loaded_bytes)
+
+            # receive encoded frame (jpg)
+            if SERVER_TYPE == "C++":
+                loaded_bytes = bytearray(serialized)
+                compressed = np.asarray(loaded_bytes, dtype="ubyte")
+            else:
+                loaded_bytes = BytesIO(serialized)
+                compressed = np.load(loaded_bytes)
+
             frame = cv2.imdecode(compressed, cv2.IMREAD_UNCHANGED)
 
             # Alter and show frame

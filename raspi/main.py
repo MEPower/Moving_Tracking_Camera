@@ -209,3 +209,9 @@ while True:
 # release the capture
 video.release()
 cv2.destroyAllWindows()
+
+# close arduino
+if arduino is not None:
+    arduino.__exit__()
+
+exit(0)
