@@ -2,18 +2,24 @@
 #include <map>
 #include <optional>
 #include <thread>
+#include <unistd.h>
 
 #include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/tracking.hpp>
 #include <opencv2/videoio.hpp>
 
+#include <serial/serial.h>
+
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-// Serial: https://github.com/wjwwood/serial
-// Websockets: https://github.com/zaphoyd/websocketpp/ (v0.8.2, also needs boost asio)
+/*
+    == Library Installation ==
+    OpenCV: use your distro's package, if any (can also be built manually, see install-opencv.sh)
+    Serial: https://github.com/wjwwood/serial (requires https://github.com/ros/catkin for build, wrong installation dir in Makefile)
+    Websockets: https://github.com/zaphoyd/websocketpp/ (v0.8.2, also needs boost asio - just use your distro's boost package)
+*/
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 typedef server::message_ptr message_ptr;
@@ -35,13 +41,23 @@ enum class TrackingState {
     TERMINATE
 };
 
+enum class ArduinoState {
+    NOT_CONNECTED,
+    CONNECTED
+};
+
 ObjectTracker TRACKER = ObjectTracker::CSRT;
 TrackingState STATE = TrackingState::IDLE;
+ArduinoState ARDUINO_STATE = ArduinoState::NOT_CONNECTED;
 
 cv::Mat ACTIVE_FRAME(480, 640, CV_8UC3);
 cv::Mat LAST_SEND_FRAME;
+
 std::optional<std::pair<cv::Mat, cv::Rect>> TO_TRACK = std::nullopt; // frame and corresponding bounding box
-std::optional<std::string> ARDUINO = std::nullopt; // replace by correct type when integrating serial
+std::optional<serial::Serial> ARDUINO = std::nullopt;
+
+std::string SERIAL_PORT = "/dev/pts/2";
+int BAUDRATE = 9600;
 int WS_CONN_COUNT = 0;
 
 cv::Ptr<cv::Tracker> getTracker(ObjectTracker trackerChoice) {
@@ -64,40 +80,63 @@ void displayGeneralInfo(cv::Mat &frame, int64 timer) {
     cv::putText(frame, "FPS: " + std::to_string(fps), {100, 50}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
 
     // Connection State
-    cv::putText(frame, (ARDUINO ? "Arduino connected" : "Arduino not connected"), {100, 170}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {255, 255, 0}, 2);
+    cv::putText(frame, (ARDUINO_STATE == ArduinoState::CONNECTED ? "Arduino connected" : "Arduino not connected - Press A to connect"), {100, 170}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {255, 255, 0}, 2);
 }
 
 void displayTrackingFailure(cv::Mat &frame) {
     cv::putText(frame, "Tracking failure detected", {100, 110}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {0, 0, 255}, 2);
 }
 
-void displayTrackingSuccess(cv::Mat &frame, cv::Rect bbox, cv::Point f_center, cv::Point offset_vector){
+void displayTrackingSuccess(cv::Mat &frame, cv::Rect bbox, cv::Point f_center, cv::Point offset_vector) {
     cv::Point p_center = (bbox.tl() + bbox.br()) / 2;
     cv::rectangle(frame, bbox, {255, 0, 0}, 2, 1);
     cv::line(frame, f_center, p_center, {255, 0, 0}, 2, 1);
     cv::putText(frame, "Center offset (scaled): (" + std::to_string(offset_vector.x) + ", " + std::to_string(offset_vector.y) + ")", {100, 110}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {255, 255, 0}, 2);
 }
 
-cv::Point calculateOffsetVector(cv::Rect bbox, cv::Point2d f_center){
+cv::Point calculateOffsetVector(cv::Rect bbox, cv::Point2d f_center) {
     cv::Point2d p_center = (bbox.tl() + bbox.br()) / 2.0;
     cv::Point2d offset = p_center - f_center;
     cv::Point2d norm_offset(offset.x / f_center.x, offset.y / f_center.y);
     cv::Point2d clamped_offset(
-        std::min(std::max(-1.0, norm_offset.x), 1.0),
-        std::min(std::max(-1.0, norm_offset.y), 1.0)   
+        std::min(std::max(-1.0, norm_offset.x), 0.99),
+        std::min(std::max(-1.0, norm_offset.y), 0.99)   
     );
-    return 255 * clamped_offset;
+    return 5 * clamped_offset;
 }
 
-void sendToArduino(cv::Point offset_vector){
-    // TODO
+void connectToArduino() {
+    if(ARDUINO_STATE == ArduinoState::CONNECTED) return;
+    ARDUINO.emplace(SERIAL_PORT, BAUDRATE, serial::Timeout::simpleTimeout(1000));
+
+    while(!ARDUINO->isOpen()) {
+        std::cerr << "Waiting to open Arduino connection\n";
+        ARDUINO->open();
+        usleep(100000);
+    }
+
+    std::string ready = ARDUINO->read();
+    if(ready != "r") {
+        ARDUINO->close();
+        ARDUINO = std::nullopt;
+    } else {
+        ARDUINO_STATE = ArduinoState::CONNECTED;
+    }
+}
+
+void sendToArduino(cv::Point offset_vector) {
+    if(ARDUINO_STATE != ArduinoState::CONNECTED) return;
+    offset_vector += cv::Point(5, 5);
+    std::string message = std::to_string(offset_vector.x) + std::to_string(offset_vector.y);
+    ARDUINO->write(message);
+    std::cerr << ARDUINO->readline();
 }
 
 void websocket_handler(server* serv, websocketpp::connection_hdl hdl, message_ptr msg) {
     std::string message = msg->get_payload();
     std::cerr << "Received message: " << message << "\n";
 
-    if(STATE == TrackingState::RECEIVE_BBOX){
+    if(STATE == TrackingState::RECEIVE_BBOX) {
         std::cerr << "Track region received\n";
         std::vector<int> bbox(4);
         message = message.substr(1, message.length()-2);
@@ -109,7 +148,7 @@ void websocket_handler(server* serv, websocketpp::connection_hdl hdl, message_pt
         cv::Rect roi(bbox[0], bbox[1], bbox[2], bbox[3]);
         TO_TRACK.emplace(LAST_SEND_FRAME.clone(), roi);
         STATE = TrackingState::TRACK;
-    } else if(message == "c"){
+    } else if(message == "c") {
         std::cerr << "Companion is connected\n";
         serv->send(hdl, "ok", opcode::TEXT);
     } else if(message == "f") {
@@ -118,25 +157,27 @@ void websocket_handler(server* serv, websocketpp::connection_hdl hdl, message_pt
         std::vector<uchar> buf;
         cv::imencode(".jpg", LAST_SEND_FRAME, buf);
         serv->send(hdl, buf.data(), buf.size(), opcode::BINARY);
-    } else if(message == "t"){
+    } else if(message == "t") {
         STATE = TrackingState::RECEIVE_BBOX;
+    } else if(message == "a") {
+        connectToArduino();
     }
 }
 
 // maintain number of open connections and exit the program once all were closed by the client(s)
-void websocket_on_open(websocketpp::connection_hdl hdl){
+void websocket_on_open(websocketpp::connection_hdl hdl) {
     WS_CONN_COUNT += 1;
 }
 
-void websocket_on_close(server* serv, websocketpp::connection_hdl hdl){
+void websocket_on_close(server* serv, websocketpp::connection_hdl hdl) {
     WS_CONN_COUNT -= 1;
-    if(WS_CONN_COUNT == 0){
+    if(WS_CONN_COUNT == 0) {
         serv->stop_listening();
         STATE = TrackingState::TERMINATE;
     }
 }
 
-void start_websocket_server(){
+void start_websocket_server() {
     server ws_server;
 
     try {
@@ -171,6 +212,8 @@ int main() {
     }
 
     cv::Rect bbox;
+    cv::Point offset_vector;
+    bool send_vector = false;
     auto tracker = getTracker(TRACKER);
 
     while(STATE != TrackingState::TERMINATE) {
@@ -187,9 +230,9 @@ int main() {
             }
 
             if(tracker->update(frame, bbox)) {
-                cv::Point offset_vector = calculateOffsetVector(bbox, f_center);
+                offset_vector = calculateOffsetVector(bbox, f_center);
                 displayTrackingSuccess(frame, bbox, f_center, offset_vector);
-                sendToArduino(offset_vector);
+                send_vector = true;
             } else {
                 displayTrackingFailure(frame);
             }
@@ -197,9 +240,14 @@ int main() {
 
         displayGeneralInfo(frame, timer);
         ACTIVE_FRAME = frame.clone();
+        if(send_vector){
+            sendToArduino(offset_vector);
+            send_vector = false;
+        }
     }
 
     capture.release();
     ws_thread.join();
+    ARDUINO->close();
     return 0;
 }

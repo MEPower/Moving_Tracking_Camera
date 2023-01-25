@@ -6,11 +6,11 @@ import cv2
 import numpy as np
 from io import BytesIO
 
-SERVER = "172.20.10.2:8764"
+#SERVER = "172.20.10.2:8764"
 SERVER_TYPE = "C++"  # or None
 
 SERVER = "localhost:8764"
-SERVER_TYPE = "Python"
+#SERVER_TYPE = "Python"
 
 
 async def client():
@@ -23,7 +23,7 @@ async def client():
 
         while True:
             keypress = cv2.waitKey(1) & 0xFF
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.1)
 
             # Request frame
             await websocket.send("f")
@@ -53,6 +53,8 @@ async def client():
                 # Request rpi to track image region in bbox
                 await websocket.send("t")
                 await websocket.send(str(bbox))
+            elif keypress == ord('a'):
+                await websocket.send("a")
             elif keypress == ord('q'):
                 cv2.destroyAllWindows()
                 break
