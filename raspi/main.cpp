@@ -1,8 +1,8 @@
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <thread>
-#include <unistd.h>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -52,6 +52,10 @@ ArduinoState ARDUINO_STATE = ArduinoState::NOT_CONNECTED;
 
 cv::Mat ACTIVE_FRAME(480, 640, CV_8UC3);
 cv::Mat LAST_SEND_FRAME;
+
+cv::Point OFFSET_VECTOR(5, 5);
+bool DO_SEND_VECTOR = false;
+std::mutex VECTOR_MUTEX;
 
 std::optional<std::pair<cv::Mat, cv::Rect>> TO_TRACK = std::nullopt; // frame and corresponding bounding box
 std::optional<serial::Serial> ARDUINO = std::nullopt;
@@ -112,7 +116,7 @@ void connectToArduino() {
     while(!ARDUINO->isOpen()) {
         std::cerr << "Waiting to open Arduino connection\n";
         ARDUINO->open();
-        usleep(100000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     std::string ready = ARDUINO->read();
@@ -124,12 +128,23 @@ void connectToArduino() {
     }
 }
 
-void sendToArduino(cv::Point offset_vector) {
-    if(ARDUINO_STATE != ArduinoState::CONNECTED) return;
-    offset_vector += cv::Point(5, 5);
-    std::string message = std::to_string(offset_vector.x) + std::to_string(offset_vector.y);
-    ARDUINO->write(message);
-    std::cerr << ARDUINO->readline();
+void sendToArduinoThread() {
+    while(STATE != TrackingState::TERMINATE) {
+        if(ARDUINO_STATE != ArduinoState::CONNECTED) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        } else if(DO_SEND_VECTOR) {
+            cv::Point vector_to_send(5, 5); 
+            {
+                std::lock_guard<std::mutex> lock(VECTOR_MUTEX);
+                vector_to_send = OFFSET_VECTOR + cv::Point(5, 5);
+                DO_SEND_VECTOR = false;
+            }
+            std::string message = std::to_string(vector_to_send.x) + std::to_string(vector_to_send.y);
+            ARDUINO->write(message);
+            std::cerr << ARDUINO->readline();
+        }
+    }
 }
 
 void websocket_handler(server* serv, websocketpp::connection_hdl hdl, message_ptr msg) {
@@ -199,6 +214,7 @@ void start_websocket_server() {
 
 int main() {
     std::thread ws_thread(start_websocket_server);
+    std::thread serial_thread(sendToArduinoThread);
 
     cv::Mat frame;
     cv::VideoCapture capture;
@@ -212,8 +228,6 @@ int main() {
     }
 
     cv::Rect bbox;
-    cv::Point offset_vector;
-    bool send_vector = false;
     auto tracker = getTracker(TRACKER);
 
     while(STATE != TrackingState::TERMINATE) {
@@ -230,24 +244,24 @@ int main() {
             }
 
             if(tracker->update(frame, bbox)) {
-                offset_vector = calculateOffsetVector(bbox, f_center);
-                displayTrackingSuccess(frame, bbox, f_center, offset_vector);
-                send_vector = true;
+                cv::Point vector = calculateOffsetVector(bbox, f_center);
+                displayTrackingSuccess(frame, bbox, f_center, vector);
+                std::lock_guard<std::mutex> lock(VECTOR_MUTEX);
+                OFFSET_VECTOR = vector;
+                DO_SEND_VECTOR = true;
             } else {
+                DO_SEND_VECTOR = false;
                 displayTrackingFailure(frame);
             }
         }
 
         displayGeneralInfo(frame, timer);
         ACTIVE_FRAME = frame.clone();
-        if(send_vector){
-            sendToArduino(offset_vector);
-            send_vector = false;
-        }
     }
 
     capture.release();
     ws_thread.join();
+    serial_thread.join();
     ARDUINO->close();
     return 0;
 }
