@@ -1,3 +1,5 @@
+- Rest-Team nochmal fragen zu Performance RAspi-Code stellen
+
 About Arduino perrformance
 
 - because of beginner focus more focus on security than on speed
@@ -12,17 +14,58 @@ About Raspberry Pi performance
 - focus mostly on raspberry performance, as Arduino improvemenst ca only happen with a better microcontrollller
  or rewriting importnat functions
 
+TODO:
+- find biggest resource users inn source code
+- apply all found functions without + with raspi running(Python+ C)
+- find Performability metrics + apply them while measuringv tiime - Performability not as relevant as I thought, so
+Im omitting it
+
 Relevnat performance metrics or at least things we should take a look at:
+- perf
 - time per program = clock period * cycles per instruction * instructions executed per program 
 - Clock rate
 - Cycles per Instruction
 - execution time 
 - turnaround time(amybe after the tarcked object has disappeared)
--(availability) - not for us, only one is using the system
 - wall clock time(time elapsed as seen on clock or stopeatch from program  start till now)
 - response time(how long it takes until CPU reacts(to an obviious movement))
-- throoughput(MIPS is one way of measuring throughput)
 - scalability(how does teh system handle faster movements)
+
+
+traditional metrics, not suited for real-time operating systems
+- throughput(MIPS is one way of measuring throughput, avergae number of instructions to be processed in time unit)
+-(availability) - (percetage of timeframe that system was available (for new image inouts))
+-realiability(how likely sytem is wizhout error in a given timeframe)
+
+- apply Performability metrics + levels to our system
+
+-> if later projects  want to improve system performance, they can use strace, heaptrack, compiler sanitizers, Linux Tracing Tools next Generation
+
+"Finally, performability of a system is the probability that the system will perform at or above some 
+performance level at a specific point of time [10]. Unlike reliability, which relates to correct functionality of 
+all components, performability measures the probability that a subset of functions will be performed correctly. 
+Graceful degradation, which is a system's ability to perform at a lower level of performance in the face of faults,
+ can be expressed in terms of a performability measure."(https://www.sciencedirect.com/topics/computer-science/performability)
+
+-> deadlines: planen wir, Eingaben, die zu lange verarbeitet werden, zu verwerfen oder verarbeiten wir alle 
+eingehenden Eingaben(also die Daten von jedem eingehendenn Bild)? - wenn nicht, dann brauchen wir performability ja 
+gar nicht
+
+-accomplishment levels:
+ - kamera bewegt sich(nicht)
+ - kamera bewegt sich schnell genug, sodass folgebilder nicht verspätet werden(alternativ: verspätet sich)
+
+- Haben wir eine deadline?
+- Ist unser task nur, dass kamera sich nach Raspi bewegt, oder sollen wir dabeiu Zeiten einhalten?
+
+-eerweiterung accomplishment level um 1 ebene für jede neue var, je nach Wert var(1 oder 0) werden Zustände erreicht
+und die Anazhl der bisherigen Zustände verdoppelt
+ -> Wahrscheinlichkeit, dass var 1 ist, wird in Vektor der scc-Level-wahrsch festgehalten
+
+- du musst noch irgendwie oben + unten begrenzen, wie oft programm pro bild durchgegagegn wird(also solange wir in 
+while-Scjliefee sind oder solange positive if.bedingug getriggert bleibt) - frag mal Raspi-Team
+
+wie setzt sich ausfühtungszeot proramm aus den verschiedenen programmteilem zusammen?
 
 possibly useful linux commnads commands:
 - nice
@@ -36,12 +79,17 @@ possibly useful linux commnads commands:
 - htop 
 
 improvement options:
-- get better raspberry(Model 4+), as they have better CPU and v´can have more RAM
+- get better raspberry(Model 4+), as they have better CPU and can have more RAM
 - overclocking(be aware of negative consequwnces)
--better SD-card(SSD?)
+- better SD-card(SSD?)
 - experient with/add a GPU
 - prevent overhaeting with air cooler
- -always potentially better performance by refactoring current code
+- always potentially better performance by refactoring current code
+
+- python companion(for raspberry) has a while loop, but no set end bc it ends on input of a key - O(?) 
+- wegen der aktuell 3 Motoren hat Arduino-Code Laufzeit von O(3) (besonders wegen Laufzeit der loop-Schliefe)
+- generell scheint raspi-code(c und python) keine loops mit von eingabe abh Zahl durchläufe zu haben - oder steht, 
+sobald wir das zu überprüfende Objekt "durchgekassen" haben, die Anzahl der Durchläufe bereits fest?
 
 Open questions:
 -would using raspberry pi camera lead too better runtimr
