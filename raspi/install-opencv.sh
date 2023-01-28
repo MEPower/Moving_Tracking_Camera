@@ -1,3 +1,5 @@
+# There might also be precompiled packages for your distribution to use! (https://pkgs.org/search/?q=opencv)
+
 # Install minimal prerequisites (Ubuntu 18.04 as reference)
 sudo apt update && sudo apt install -y cmake g++ wget unzip
 # Download and unpack sources
