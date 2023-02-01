@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 import asyncio
-
 import websockets
 import cv2
 import numpy as np
 from io import BytesIO
 
-#SERVER = "172.20.10.2:8764"
-SERVER_TYPE = "C++"  # or None
-
-SERVER = "localhost:8764"
-#SERVER_TYPE = "Python"
+# Configuration
+SERVER = "localhost:8764" # IP:PORT
+SERVER_TYPE = "C++"  # C++ or Python
 
 
 async def client():

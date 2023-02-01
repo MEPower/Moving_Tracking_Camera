@@ -46,23 +46,30 @@ enum class ArduinoState {
     CONNECTED
 };
 
+// Configuration
 ObjectTracker TRACKER = ObjectTracker::CSRT;
+std::string SERIAL_PORT = "/dev/pts/2";
+int BAUDRATE = 9600;
+int WEBSOCKET_PORT = 8764;
+std::pair<int, int> FRAME_DIMENSIONS(1280, 720);
+
+// States
 TrackingState STATE = TrackingState::IDLE;
 ArduinoState ARDUINO_STATE = ArduinoState::NOT_CONNECTED;
 
-cv::Mat ACTIVE_FRAME(480, 640, CV_8UC3);
+// Current camera frames
+cv::Mat ACTIVE_FRAME(FRAME_DIMENSIONS.second, FRAME_DIMENSIONS.first, CV_8UC3);
 cv::Mat LAST_SEND_FRAME;
 
+// Offset vector and mutexes for the Serial thread
 cv::Point OFFSET_VECTOR(5, 5);
 bool DO_SEND_VECTOR = false;
 std::mutex VECTOR_MUTEX;
 
-std::optional<std::pair<cv::Mat, cv::Rect>> TO_TRACK = std::nullopt; // frame and corresponding bounding box
+std::optional<std::pair<cv::Mat, cv::Rect>> TO_TRACK = std::nullopt; // tracking object: bounding box and corresponding reference frame
 std::optional<serial::Serial> ARDUINO = std::nullopt;
 
-std::string SERIAL_PORT = "/dev/pts/2";
-int BAUDRATE = 9600;
-int WS_CONN_COUNT = 0;
+int WS_CONN_COUNT = 0; // number of open websocket connections
 
 cv::Ptr<cv::Tracker> getTracker(ObjectTracker trackerChoice) {
     if(trackerChoice == ObjectTracker::CSRT) {
@@ -72,7 +79,7 @@ cv::Ptr<cv::Tracker> getTracker(ObjectTracker trackerChoice) {
     }
 }
 
-void displayGeneralInfo(cv::Mat &frame, int64 timer) {
+void displayGeneralInfo(cv::Mat &frame, int fps) {
     // Tracker Type
     cv::putText(frame, (TRACKER == ObjectTracker::CSRT ? "CSRT Tracker" : "KCF Tracker"), {100, 20}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
 
@@ -80,7 +87,6 @@ void displayGeneralInfo(cv::Mat &frame, int64 timer) {
     cv::putText(frame, std::to_string(frame.cols) + "x" + std::to_string(frame.rows), {100, 80}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
 
     // Frames per Second
-    int fps = cv::getTickFrequency() / (cv::getTickCount() - timer);
     cv::putText(frame, "FPS: " + std::to_string(fps), {100, 50}, cv::FONT_HERSHEY_SIMPLEX, 0.75, {50, 170, 50}, 2);
 
     // Connection State
@@ -204,7 +210,7 @@ void start_websocket_server() {
         ws_server.set_message_handler(bind(&websocket_handler, &ws_server,::_1,::_2));
         ws_server.set_open_handler(bind(&websocket_on_open, ::_1));
         ws_server.set_close_handler(bind(&websocket_on_close, &ws_server, ::_1));
-        ws_server.listen(8764);
+        ws_server.listen(WEBSOCKET_PORT);
         ws_server.start_accept();
         ws_server.run();
     } catch (websocketpp::exception const & e) {
@@ -219,8 +225,8 @@ int main() {
     cv::Mat frame;
     cv::VideoCapture capture;
     bool opened = capture.open(2, cv::CAP_ANY, {
-        cv::VideoCaptureProperties::CAP_PROP_FRAME_WIDTH, 640,
-        cv::VideoCaptureProperties::CAP_PROP_FRAME_HEIGHT, 480
+        cv::VideoCaptureProperties::CAP_PROP_FRAME_WIDTH, FRAME_DIMENSIONS.first,
+        cv::VideoCaptureProperties::CAP_PROP_FRAME_HEIGHT, FRAME_DIMENSIONS.second
     });
 
     if(!opened) {
@@ -255,7 +261,8 @@ int main() {
             }
         }
 
-        displayGeneralInfo(frame, timer);
+        int fps = cv::getTickFrequency() / (cv::getTickCount() - timer);
+        displayGeneralInfo(frame, fps);
         ACTIVE_FRAME = frame.clone();
     }
 

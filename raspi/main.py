@@ -6,10 +6,15 @@ import websockets
 from io import BytesIO
 from time import sleep
 
-HEADLESS = False
+# Configuration
+HEADLESS = True
+TRACKER = "csrt"
+SERIAL_PORT = '/dev/cu.usbmodem2101'
+BAUDRATE = 9600
+WEBSOCKET_PORT = 8764
+FRAME_DIMENSIONS = (1280, 720)
 
 # Communication with Arduino
-BAUDRATE = 9600  # 115200
 arduino = None
 arduino_state = None
 
@@ -18,9 +23,6 @@ ACTIVE_FRAME = None
 LAST_SEND_FRAME = None
 TO_TRACK = None
 STATE = "IDLE"
-
-# Tracking Algorithm
-TRACKER = "kcf"
 
 
 async def handler(websocket):
@@ -48,15 +50,36 @@ async def handler(websocket):
             ROI = eval(await websocket.recv())
             TO_TRACK = (LAST_SEND_FRAME, ROI)
             STATE = "TRACK"
+        elif message == "a":
+            connect_to_arduino()
 
 
 async def start_server_internal():
-    async with websockets.serve(handler, "localhost", 8764, ping_timeout=None):
+    async with websockets.serve(handler, "localhost", WEBSOCKET_PORT, ping_timeout=None):
         await asyncio.Future()  # run forever
 
 
 def start_server():
     asyncio.run(start_server_internal())
+
+def connect_to_arduino():
+    arduino = serial.Serial(port=SERIAL_PORT, baudrate=BAUDRATE)
+    arduino.__enter__()
+
+    while not arduino.isOpen():
+        print('waiting to open')
+        arduino.open()
+        sleep(0.1)
+
+    sleep(0.1)
+
+    ready = arduino.read()
+    if ready != b'r' or arduino is None:
+        arduino_state = "failed"
+        arduino.__exit__()
+        arduino = None
+    else:
+        arduino_state = "connected"
 
 
 wssTask = threading.Thread(target=start_server)
@@ -72,10 +95,10 @@ OPENCV_OBJECT_TRACKERS = {
 
 # Set up video capture
 video = cv2.VideoCapture(0)
-video.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-video.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+video.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_DIMENSIONS[0])
+video.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_DIMENSIONS[1])
 if not video:
-    print("!!! Failed VideoCapture: invalid parameter!")
+    print("[ERROR] Failed VideoCapture: invalid parameter!")
     exit(1)
 
 # Main Loop
@@ -83,7 +106,7 @@ while True:
     # Capture frame-by-frame
     ret, frame = video.read()
     if type(frame) == type(None):
-        print("!!! Couldn't read frame!")
+        print("[ERROR] Couldn't read frame!")
         break
 
     f_height = len(frame)
@@ -96,25 +119,9 @@ while True:
     if not HEADLESS:
         keyPress = cv2.waitKey(1) & 0xFF
 
-        # Press C to connect to Arduino
-        if keyPress == ord('c'):
-            arduino = serial.Serial(port='/dev/cu.usbmodem2101', baudrate=9600)
-            arduino.__enter__()
-
-            while not arduino.isOpen():
-                print('waiting to open')
-                arduino.open()
-                sleep(0.1)
-
-            sleep(0.1)
-
-            ready = arduino.read()
-            if ready != b'r' or arduino is None:
-                arduino_state = "failed"
-                arduino.__exit__()
-                arduino = None
-            else:
-                arduino_state = "connected"
+        # Press A to connect to Arduino
+        if keyPress == ord('a'):
+            connect_to_arduino()
 
         # Press T to define Tracking Region
         if keyPress == ord('t'):
@@ -175,8 +182,6 @@ while True:
             if arduino is not None:
                 message = f'{scaled_vector[0]}{scaled_vector[1]}'.encode('UTF-8')
                 arduino.write(message)
-                # arduino.write(scaled_vector[0].to_bytes())
-                # arduino.write(scaled_vector[1].to_bytes())
                 print(arduino.read(), arduino.read_all())
             # Tracking success
         else:
@@ -193,7 +198,7 @@ while True:
     fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
     cv2.putText(frame, "FPS : " + str(int(fps)), (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50, 170, 50), 2)
 
-    cv2.putText(frame, "Arduino " + "not connected" if arduino_state is None else arduino_state, (100, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
+    cv2.putText(frame, "Arduino " + "not connected - Press A to connect" if arduino_state is None else arduino_state, (100, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.75,
                 (255, 255, 0), 2)
 
     # Make frame accessible to server
