@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 import threading
 import cv2, serial, numpy as np
 
@@ -12,6 +14,7 @@ TRACKER = "csrt"
 SERIAL_PORT = '/dev/cu.usbmodem2101'
 BAUDRATE = 9600
 WEBSOCKET_PORT = 8764
+CAMERA_ID = 0
 FRAME_DIMENSIONS = (1280, 720)
 
 # Communication with Arduino
@@ -94,7 +97,7 @@ OPENCV_OBJECT_TRACKERS = {
 }
 
 # Set up video capture
-video = cv2.VideoCapture(0)
+video = cv2.VideoCapture(CAMERA_ID)
 video.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_DIMENSIONS[0])
 video.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_DIMENSIONS[1])
 if not video:

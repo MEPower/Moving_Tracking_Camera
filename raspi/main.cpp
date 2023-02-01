@@ -17,8 +17,7 @@
 /*
     == Library Installation ==
     OpenCV: use your distro's package, if any (can also be built manually, see install-opencv.sh)
-    Serial: https://github.com/wjwwood/serial (requires https://github.com/ros/catkin for build, wrong installation dir in Makefile)
-        - needs to be added to ld config using: echo /usr/local/lib > /etc/ld.so.conf.d/serial-lib.conf + sudo ldconfig
+    Serial: https://github.com/wjwwood/serial (requires https://github.com/ros/catkin for build, wrong installation dir in Makefile, needs to be added to ld config)
     Websockets: https://github.com/zaphoyd/websocketpp/ (v0.8.2, also needs boost asio - just use your distro's boost package)
 */
 
@@ -52,13 +51,14 @@ ObjectTracker TRACKER = ObjectTracker::CSRT;
 std::string SERIAL_PORT = "/dev/pts/2";
 int BAUDRATE = 9600;
 int WEBSOCKET_PORT = 8764;
+int CAMERA_ID = 0;
 
 // States
 TrackingState STATE = TrackingState::IDLE;
 ArduinoState ARDUINO_STATE = ArduinoState::NOT_CONNECTED;
 
 // Current camera frames
-cv::Mat ACTIVE_FRAME(1920, 1080, CV_8UC3);
+cv::Mat ACTIVE_FRAME(1080, 1920, CV_8UC3);
 cv::Mat LAST_SEND_FRAME;
 
 // Offset vector and mutexes for the Serial thread
@@ -224,7 +224,7 @@ int main() {
 
     cv::Mat frame;
     cv::VideoCapture capture;
-    bool opened = capture.open(2, cv::CAP_ANY);
+    bool opened = capture.open(CAMERA_ID, cv::CAP_ANY);
 
     if(!opened) {
         std::cerr << "[ERROR] opening the VideoCapture from the camera failed!\n";
