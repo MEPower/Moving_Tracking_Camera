@@ -3,11 +3,14 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <chrono>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/tracking.hpp>
 #include <opencv2/videoio.hpp>
+#include <iostream>
+#include <fstream>
 
 #include <serial/serial.h>
 
@@ -20,6 +23,9 @@
     Serial: https://github.com/wjwwood/serial (requires https://github.com/ros/catkin for build, wrong installation dir in Makefile, needs to be added to ld config)
     Websockets: https://github.com/zaphoyd/websocketpp/ (v0.8.2, also needs boost asio - just use your distro's boost package)
 */
+
+std::ofstream myfile;
+myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs");
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 typedef server::message_ptr message_ptr;
@@ -234,6 +240,11 @@ int main() {
     auto tracker = getTracker(TRACKER);
 
     while(STATE != TrackingState::TERMINATE) {
+        using namespace std::chrono;
+        milliseconds start = duration_cast< milliseconds >(
+                system_clock::now().time_since_epoch()
+        );
+
         capture >> frame;
         if(frame.empty()) break;
         cv::Point2d f_center(frame.cols/2.0, frame.rows/2.0);
@@ -261,6 +272,17 @@ int main() {
         int fps = cv::getTickFrequency() / (cv::getTickCount() - timer);
         displayGeneralInfo(frame, fps);
         ACTIVE_FRAME = frame.clone();
+
+        milliseconds end = duration_cast< milliseconds >(
+                system_clock::now().time_since_epoch()
+        );
+        milliseconds total = end-start;
+
+        std::ofstream myfile;
+        myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs");
+        myfile << total + " \n";
+        myfile.close();
+
     }
 
     capture.release();
