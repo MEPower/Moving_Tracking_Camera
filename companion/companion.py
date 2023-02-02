@@ -11,6 +11,7 @@ SERVER = "localhost:8764" # IP:PORT
 SERVER_TYPE = "C++"  # C++ or Python
 
 
+
 async def client():
     async with websockets.connect("ws://" + SERVER, max_size=None, read_limit=2 ** 20) as websocket:
         print("Raspberry Connected, press f to get frame, press t to select tracking area")
