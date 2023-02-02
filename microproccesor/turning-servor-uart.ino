@@ -47,34 +47,66 @@ bool dir = false;
 
 void setup()
 {
+    Serial.begin(9600);
+
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW); // turn the LED on
+
     for (int i = 0; i < sizeMotors; i++)
     {
         SoftSerials[i].begin(11520);      // initialize software serial for UART motor control
         TMCdrivers[i].beginSerial(11520); // Initialize UART
         TMCdrivers[i].begin();            // UART: Init SW UART (if selected) with default 115200 baudrate
         TMCdrivers[i].toff(5);            // Enables driver in software
-        TMCdrivers[i].rms_current(400);   // Set motor RMS current
-        TMCdrivers[i].microsteps(16);     // Set microsteps
+        TMCdrivers[i].rms_current(1200);  // Set motor RMS current
+        TMCdrivers[i].microsteps(8);      // Set microsteps
 
         TMCdrivers[i].en_spreadCycle(false);
         TMCdrivers[i].pwm_autoscale(true); // Needed for stealthChop
 
-        steppers[i].setMaxSpeed(800 * steps_per_mm);      // 100mm/s @ 80 steps/mm
-        steppers[i].setAcceleration(1000 * steps_per_mm); // 2000mm/s^2
+        steppers[i].setMaxSpeed(800 * steps_per_mm);     // 100mm/s @ 80 steps/mm
+        steppers[i].setAcceleration(100 * steps_per_mm); // 2000mm/s^2
         steppers[i].setEnablePin(EN_PIN + MOTOR_PIN_OFFSETS[i]);
         steppers[i].setPinsInverted(false, false, true);
         steppers[i].enableOutputs();
     }
+
+    // send ready
+    Serial.write('r');
 }
 
 void loop()
 {
+
     for (int i = 0; i < sizeMotors; i++)
     {
-        if (steppers[i].distanceToGo() == 0)
-        {
-            steppers[i].move(100 * steps_per_mm); // Move 100mm
-        }
         steppers[i].run();
+    }
+
+    if (Serial.available() > 1)
+    {
+
+        // 0-9 allowed
+        char x = Serial.read();
+        char y = Serial.read();
+
+        // debug
+        // Serial.print(x);
+        // Serial.print(y);
+
+        // convert chars to int. Substract 5 to put 0 in the middle
+        int xVelocity = (x - '0') - 5;
+        int yVelocity = (y - '0') - 5;
+
+        steppers[0].setMaxSpeed(10 * abs(yVelocity) * steps_per_mm);
+        steppers[1].setMaxSpeed(10 * abs(xVelocity) * steps_per_mm);
+
+        int sign0 = yVelocity > 0 ? 1 : -1;
+        steppers[0].move(1 * steps_per_mm * sign0);
+        int sign1 = xVelocity > 0 ? 1 : -1;
+        steppers[1].move(10 * steps_per_mm * sign1);
+
+        Serial.print(yVelocity);
+        Serial.print(xVelocity);
     }
 }
