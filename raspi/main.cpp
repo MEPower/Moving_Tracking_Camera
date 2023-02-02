@@ -25,7 +25,9 @@
 */
 
 std::ofstream myfile;
-myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs");
+//myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs_cpp");
+myfile.open ("performance_logs_cpp.txt");
+cout << "created file";
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 typedef server::message_ptr message_ptr;

@@ -30,8 +30,9 @@ TRACKER = "kcf"
 #with open(os.path.join(path, "performance_logs.txt"), 'w') as csvfile:
 #   filewriter = csv.writer(csvfile)
 
-with open("performance_logs.txt", 'w') as csvfile:
+with open("performance_logs_python.txt", 'w') as csvfile:
    filewriter = csv.writer(csvfile)
+   print("started logging")
 
 async def handler(websocket):
     global STATE, LAST_SEND_FRAME, TO_TRACK, ACTIVE_FRAME
