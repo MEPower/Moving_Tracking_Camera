@@ -20,7 +20,7 @@ TO_TRACK = None
 STATE = "IDLE"
 
 # Tracking Algorithm
-TRACKER = "kcf"
+TRACKER = "csrt"
 
 
 async def handler(websocket):
