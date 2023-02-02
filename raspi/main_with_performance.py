@@ -1,5 +1,6 @@
 import threading
 import cv2, serial, numpy as np
+import os
 
 import asyncio
 import websockets
@@ -25,9 +26,12 @@ STATE = "IDLE"
 # Tracking Algorithm
 TRACKER = "kcf"
 
-path = "C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs"
-with open(path, 'wb') as csvfile:
-    filewriter = csv.writer(csvfile)
+#path = "C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi"
+#with open(os.path.join(path, "performance_logs.txt"), 'w') as csvfile:
+#   filewriter = csv.writer(csvfile)
+
+with open("performance_logs.txt", 'w') as csvfile:
+   filewriter = csv.writer(csvfile)
 
 async def handler(websocket):
     global STATE, LAST_SEND_FRAME, TO_TRACK, ACTIVE_FRAME
@@ -224,7 +228,7 @@ if arduino is not None:
 end_time = time.time()*1000
 total_time = end_time- start_time
 
-with open(path, 'wb') as csvfile:
+with open("performance_logs.txt", 'wb') as csvfile:
     filewriter = csv.writer(csvfile)
     filewriter.writerow(total_time)
 
