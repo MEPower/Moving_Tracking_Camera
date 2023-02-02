@@ -30,9 +30,9 @@ TRACKER = "kcf"
 #with open(os.path.join(path, "performance_logs.txt"), 'w') as csvfile:
 #   filewriter = csv.writer(csvfile)
 
-with open("performance_logs_python.txt", 'w') as csvfile:
-   filewriter = csv.writer(csvfile)
-   print("started logging")
+def create_logfile():
+    with open("performance_logs_python.txt", 'w') as csvfile:
+        print("File created")
 
 async def handler(websocket):
     global STATE, LAST_SEND_FRAME, TO_TRACK, ACTIVE_FRAME
@@ -90,6 +90,7 @@ if not video:
     exit(1)
 
 # Main Loop
+create_logfile()
 while True:
     # Capture frame-by-frame
     ret, frame = video.read()
@@ -218,6 +219,13 @@ while True:
         if keyPress == ord('q'):
             break
 
+    end_time = time.time() * 1000
+    total_time = end_time - start_time
+
+    with open("performance_logs.txt", 'a') as csvfile:
+        csvfile.write(str(total_time))
+        csvfile.write("\n")
+
 # release the capture
 video.release()
 cv2.destroyAllWindows()
@@ -226,11 +234,11 @@ cv2.destroyAllWindows()
 if arduino is not None:
     arduino.__exit__()
 
-end_time = time.time()*1000
-total_time = end_time- start_time
+#end_time = time.time()*1000
+#total_time = end_time- start_time
 
-with open("performance_logs.txt", 'wb') as csvfile:
-    filewriter = csv.writer(csvfile)
-    filewriter.writerow(total_time)
+#with open("performance_logs.txt", 'wb') as csvfile:
+#    filewriter = csv.writer(csvfile)
+#    filewriter.writerow(total_time)
 
 exit(0)
