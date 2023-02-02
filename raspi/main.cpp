@@ -24,10 +24,10 @@
     Websockets: https://github.com/zaphoyd/websocketpp/ (v0.8.2, also needs boost asio - just use your distro's boost package)
 */
 
-std::ofstream myfile;
+//std::ofstream myfile;
 //myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs_cpp");
-myfile.open ("performance_logs_cpp.txt");
-cout << "created file";
+//myfile.open("performance_logs_cpp.txt");
+//std::cout << "created file";
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 typedef server::message_ptr message_ptr;
@@ -226,10 +226,7 @@ int main() {
 
     cv::Mat frame;
     cv::VideoCapture capture;
-    bool opened = capture.open(2, cv::CAP_ANY, {
-        cv::VideoCaptureProperties::CAP_PROP_FRAME_WIDTH, 640,
-        cv::VideoCaptureProperties::CAP_PROP_FRAME_HEIGHT, 480
-    });
+    bool opened = capture.open(0, cv::CAP_ANY);
 
     if(!opened) {
         std::cerr << "[ERROR] opening the VideoCapture from the camera failed!\n";
@@ -238,6 +235,9 @@ int main() {
     cv::Rect bbox;
     auto tracker = getTracker(TRACKER);
 
+    std::ofstream myfile;
+    //myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs");
+    myfile.open("performance_logs_cpp.txt");
     while(STATE != TrackingState::TERMINATE) {
         using namespace std::chrono;
         milliseconds start = duration_cast< milliseconds >(
@@ -276,12 +276,14 @@ int main() {
         );
         milliseconds total = end-start;
 
-        std::ofstream myfile;
-        myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs");
-        myfile << total + " \n";
-        myfile.close();
+        //std::ofstream myfile;
+        //myfile.open ("C:Users\\Ella\\Ella-Kopie\\Studium\\Master\\Semester1\\Eingebettete Betriebssysteme\\Moving_Tracking_Camera\\raspi\\performance_logs");
+        //myfile.open("performance_logs_cpp.txt");
+	myfile << total.count() << " \n";
+        //myfile.close();
 
     }
+    myfile.close();
 
     capture.release();
     ws_thread.join();
