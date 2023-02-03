@@ -6,9 +6,12 @@ import cv2
 import numpy as np
 from io import BytesIO
 
-# Configuration
-SERVER = "localhost:8764" # IP:PORT
-SERVER_TYPE = "C++"  # C++ or Python
+SERVER = "192.168.43.60:8764"
+#SERVER_TYPE = "C++"  # or None
+
+#SERVER = "localhost:8764"
+SERVER_TYPE = "Python"
+
 
 
 async def client():
