@@ -27,7 +27,6 @@ LAST_SEND_FRAME = None
 TO_TRACK = None
 STATE = "IDLE"
 
-
 async def handler(websocket):
     global STATE, LAST_SEND_FRAME, TO_TRACK, ACTIVE_FRAME
     async for message in websocket:

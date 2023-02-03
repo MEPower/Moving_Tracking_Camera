@@ -232,7 +232,11 @@ int main() {
 
     cv::Mat frame;
     cv::VideoCapture capture;
+<<<<<<< HEAD
+    bool opened = capture.open(0, cv::CAP_ANY);
+=======
     bool opened = capture.open(CAMERA_ID, cv::CAP_ANY);
+>>>>>>> main
 
 
     if(!opened) {
