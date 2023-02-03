@@ -7,10 +7,10 @@ import numpy as np
 from io import BytesIO
 
 SERVER = "192.168.43.60:8764"
-#SERVER_TYPE = "C++"  # or None
+SERVER_TYPE = "C++"  # or None
 
 #SERVER = "localhost:8764"
-SERVER_TYPE = "Python"
+#SERVER_TYPE = "Python"
 
 
 
