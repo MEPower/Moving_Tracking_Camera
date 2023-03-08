@@ -18,13 +18,20 @@ This program is located in the `microproccesor` (sic!) directory.
 
 The Arduino IDE can be used to build the program and flash it onto the Arduino.
 
-You may need to install some libraries for this:
+You need to install the following libraries using the library manager in the arduino IDE:
 
-* TODO Daniel
+* AccelStepper (allows controlling multiple servos in parallel)
+* TMCStepper (allows configuring the used servor drivers by TMC)
 
 ### Use
 
-TODO Daniel
+The code is rather straightforward. In the setup function, the configuration of the servors is set. For a more detailed explanation what each function does, please refer to the manual of the driver.
+
+We tweaked the `TMCdrivers[i].rms_current(1200);` often to change the max power of the servos.
+
+Always stay within the voltage boundaries specified in the manual or you risk destroying the driver.
+
+In the loop function, the arduino waits for serial input and then moves the x-axis servor and the y-axis servo accordingly.
 
 ## Object Recognition Server (Python)
 

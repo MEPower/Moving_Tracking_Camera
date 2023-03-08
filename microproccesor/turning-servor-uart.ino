@@ -16,28 +16,25 @@
 
 constexpr uint32_t steps_per_mm = 80;
 
-const byte MOTOR_PIN_OFFSETS[] = {2, 9, 14}; // each offset is summed with the pin positions above to give the actual position on the arduino
+const byte MOTOR_PIN_OFFSETS[] = {2, 9}; // each offset is summed with the pin positions above to give the actual position on the arduino
 const int sizeMotors = sizeof(MOTOR_PIN_OFFSETS) / sizeof(byte);
 
 // simulate serial interfaces using digital pins because arduino doesn't have enough physical serial interfaces
 SoftwareSerial SoftSerials[] = {
     SoftwareSerial(SW_RX + MOTOR_PIN_OFFSETS[0], SW_TX + MOTOR_PIN_OFFSETS[0]),
     SoftwareSerial(SW_RX + MOTOR_PIN_OFFSETS[1], SW_TX + MOTOR_PIN_OFFSETS[1]),
-    SoftwareSerial(SW_RX + MOTOR_PIN_OFFSETS[2], SW_TX + MOTOR_PIN_OFFSETS[2]),
 };
 
 // set tmc driver settings
 TMC2209Stepper TMCdrivers[] = {
     TMC2209Stepper((Stream *)&SoftSerials[0], R_SENSE, DRIVER_ADDRESS),
     TMC2209Stepper((Stream *)&SoftSerials[1], R_SENSE, DRIVER_ADDRESS),
-    TMC2209Stepper((Stream *)&SoftSerials[2], R_SENSE, DRIVER_ADDRESS),
 };
 
 // run motors in parallel
 AccelStepper steppers[] = {
     AccelStepper(AccelStepper::DRIVER, MOTOR_PIN_OFFSETS[0] + STEP_PIN, MOTOR_PIN_OFFSETS[0] + DIR_PIN),
     AccelStepper(AccelStepper::DRIVER, MOTOR_PIN_OFFSETS[1] + STEP_PIN, MOTOR_PIN_OFFSETS[1] + DIR_PIN),
-    AccelStepper(AccelStepper::DRIVER, MOTOR_PIN_OFFSETS[2] + STEP_PIN, MOTOR_PIN_OFFSETS[2] + DIR_PIN),
 };
 
 int accel;
